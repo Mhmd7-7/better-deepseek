@@ -1,0 +1,393 @@
+<script>
+  import appState from "../state.js";
+  import { exportSession, collectMessages } from "../tools/exporter.js";
+  import { scheduleScan } from "../scanner.js";
+  import { loadAllHistory } from "../load-all-history.js";
+  import { readCachedMessages, getSessionIdFromUrl } from "../tools/history-cache.js";
+  import { t } from "../../lib/i18n.svelte.js";
+
+  /** How long Select All waits for the session's cache record to appear. */
+  const SELECT_ALL_CACHE_WAIT_MS = 300;
+
+  let selectionMode = $state(appState.selectionMode);
+  let selectedCount = $state(0);
+  let allSelected = $state(false);
+
+  // Bridge presence is fixed at page load — not reactive.
+  const isAndroid = typeof window !== "undefined" &&
+    typeof window.AndroidBridge?.downloadBlob === "function";
+
+  $effect(() => {
+    const handleUrlChange = () => {
+      // Exit selection mode on navigation
+      cancelSelection();
+    };
+
+    const handleSelectionChange = () => {
+      // A checkbox toggle can only address a rendered message, so it narrows a
+      // whole-session selection back to what the DOM shows.
+      narrowToRenderedMessages();
+      syncSelectionState();
+    };
+
+    window.addEventListener("bds:urlChanged", handleUrlChange);
+    window.addEventListener("bds:selectionChanged", handleSelectionChange);
+
+    // Check initial state periodically because appState is not reactive
+    const timer = setInterval(() => {
+      if (selectionMode !== appState.selectionMode) {
+        selectionMode = appState.selectionMode;
+        if (selectionMode) {
+           document.body.classList.add("bds-selection-mode-active");
+           // Sync count when opening
+           syncSelectionState();
+           // Ensure checkboxes are injected
+           scheduleScan();
+        } else {
+           document.body.classList.remove("bds-selection-mode-active");
+        }
+      }
+    }, 200);
+
+    return () => {
+      window.removeEventListener("bds:urlChanged", handleUrlChange);
+      window.removeEventListener("bds:selectionChanged", handleSelectionChange);
+      clearInterval(timer);
+    };
+  });
+
+  function cancelSelection() {
+    appState.selectionMode = false;
+    appState.selectedMessageIds.clear();
+    selectionMode = false;
+    selectedCount = 0;
+    allSelected = false;
+    document.body.classList.remove("bds-selection-mode-active");
+
+    // Uncheck all checkboxes
+    document.querySelectorAll(".bds-selection-checkbox").forEach(cb => {
+      if (cb instanceof HTMLInputElement) cb.checked = false;
+    });
+
+    window.dispatchEvent(new CustomEvent("bds:selectionChanged"));
+  }
+
+  function selectionCheckboxes() {
+    return Array.from(document.querySelectorAll(".bds-selection-checkbox"));
+  }
+
+  /**
+   * Is the selection the whole conversation rather than a set of rendered
+   * messages? Session ids come from the history cache / API; DOM nodes carry
+   * their own `msg-…` ids.
+   */
+  function isSessionSelection() {
+    const ids = Array.from(appState.selectedMessageIds);
+    return ids.length > 0 && ids.every(id => !String(id).startsWith("msg-"));
+  }
+
+  function syncSelectionState() {
+    selectedCount = appState.selectedMessageIds.size;
+    allSelected = selectedCount > 0 &&
+      (isSessionSelection() || selectedCount === selectionCheckboxes().length);
+  }
+
+  /**
+   * Drop a whole-session selection back to the rendered messages once the user
+   * unticks one: a session-wide export would ignore that untick.
+   */
+  function narrowToRenderedMessages() {
+    if (!isSessionSelection()) return;
+
+    const checkboxes = selectionCheckboxes();
+    if (!checkboxes.length || checkboxes.every(cb => cb.checked)) return;
+
+    appState.selectedMessageIds.clear();
+    for (const cb of checkboxes) {
+      if (!cb.checked) continue;
+      const id = cb.getAttribute("data-bds-message-id");
+      if (id) appState.selectedMessageIds.add(id);
+    }
+  }
+
+  /**
+   * Ids of the whole conversation, oldest first: the IndexedDB history cache
+   * first (no network, full session), then the API when the user opted into
+   * loading history. Empty when neither is available, so the caller falls back
+   * to the rendered messages.
+   */
+  async function sessionMessageIds() {
+    const sessionId = getSessionIdFromUrl();
+    if (sessionId) {
+      const cached = await readCachedMessages(sessionId, { waitMs: SELECT_ALL_CACHE_WAIT_MS });
+      if (cached.status === "hit" && cached.chatMessages.length) {
+        return cached.chatMessages
+          .map(msg => msg.message_id)
+          .filter(id => id != null)
+          .map(String);
+      }
+    }
+
+    if (!appState.settings.loadAllHistoryOnSession) return [];
+
+    const apiMessages = await loadAllHistory();
+    return apiMessages?.length
+      ? apiMessages.map(msg => msg.message_id).filter(id => id != null).map(String)
+      : [];
+  }
+
+  async function selectAll() {
+    const checkboxes = selectionCheckboxes();
+    const deselecting = allSelected;
+
+    appState.selectedMessageIds.clear();
+    checkboxes.forEach(cb => { cb.checked = !deselecting; });
+
+    if (!deselecting) {
+      for (const id of await sessionMessageIds()) {
+        appState.selectedMessageIds.add(id);
+      }
+    }
+
+    // No session-wide history available: select what is rendered.
+    if (!appState.selectedMessageIds.size) {
+      for (const cb of checkboxes) {
+        const id = cb.getAttribute("data-bds-message-id");
+        if (cb.checked && id) appState.selectedMessageIds.add(id);
+      }
+    }
+
+    syncSelectionState();
+    window.dispatchEvent(new CustomEvent("bds:selectionChanged"));
+  }
+
+  async function handleExport(format) {
+    if (selectedCount === 0) {
+      alert(t('selectionOverlay.exportHint'));
+      return;
+    }
+
+    // Whole-session selection exports everything the history cache holds;
+    // a per-message selection keeps the id filter.
+    const ids = isSessionSelection() ? null : Array.from(appState.selectedMessageIds);
+    await exportSession(format, ids);
+    cancelSelection();
+  }
+</script>
+
+{#if selectionMode}
+  <div class="bds-selection-overlay">
+    <div class="bds-selection-bar">
+
+      <!-- Layer 1: count + select-all -->
+      <div class="bds-row bds-row-info">
+        <div class="bds-selection-info">
+          <span class="bds-selection-count">{selectedCount}</span>
+          <span class="bds-selection-label">{t('selectionOverlay.selected')}</span>
+        </div>
+        <button class="bds-btn-ghost" onclick={selectAll}>
+          {allSelected ? t('selectionOverlay.deselectAll') : t('selectionOverlay.selectAll')}
+        </button>
+      </div>
+
+      <!-- Layer 2: format buttons -->
+      <div class="bds-row bds-row-formats">
+        <div class="bds-export-group">
+          <button class="bds-export-btn" onclick={() => handleExport('markdown')} title={t('selectionOverlay.markdown')}>
+            MD
+          </button>
+          {#if !isAndroid}
+            <button class="bds-export-btn" onclick={() => handleExport('pdf')} title={t('selectionOverlay.pdf')}>
+              PDF
+            </button>
+          {/if}
+          <button class="bds-export-btn" onclick={() => handleExport('html')} title={t('selectionOverlay.html')}>
+            HTML
+          </button>
+          <button class="bds-export-btn" onclick={() => handleExport('image')} title={t('selectionOverlay.image')}>
+            IMG
+          </button>
+        </div>
+      </div>
+
+      <!-- Layer 3: cancel (last, avoids accidental press) -->
+      <div class="bds-row bds-row-cancel">
+        <button class="bds-btn-cancel" onclick={cancelSelection}>{t('selectionOverlay.cancel')}</button>
+      </div>
+
+    </div>
+  </div>
+{/if}
+
+<style>
+  .bds-selection-overlay {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    pointer-events: none;
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  /* Mobile-first: vertical card layout */
+  .bds-selection-bar {
+    background: #111111;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    pointer-events: auto;
+    color: white;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .bds-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .bds-row-info {
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .bds-row-formats {
+    justify-content: center;
+  }
+
+  .bds-row-cancel {
+    justify-content: center;
+  }
+
+  /* Desktop: restore horizontal pill layout */
+  @media (min-width: 620px) {
+    .bds-selection-overlay {
+      padding: 20px;
+    }
+
+    .bds-selection-bar {
+      flex-direction: row;
+      align-items: center;
+      width: auto;
+      max-width: none;
+      border-radius: 100px;
+      padding: 8px 12px 8px 24px;
+      gap: 24px;
+    }
+
+    .bds-row-formats {
+      justify-content: flex-start;
+    }
+
+    .bds-row-cancel {
+      justify-content: flex-start;
+    }
+
+    .bds-btn-cancel {
+      border: none !important;
+      width: auto !important;
+      padding: 6px 12px !important;
+      border-radius: 20px !important;
+    }
+  }
+
+  .bds-selection-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+
+  .bds-selection-count {
+    background: #4d66ff;
+    color: white;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 14px;
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .bds-selection-label {
+    font-size: 13px;
+    color: #999;
+  }
+
+  .bds-export-group {
+    display: flex;
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 3px;
+    gap: 2px;
+    border: 1px solid #333;
+  }
+
+  .bds-export-btn {
+    background: transparent;
+    border: none;
+    color: #aaa;
+    padding: 6px 12px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .bds-export-btn:hover {
+    background: #333;
+    color: white;
+  }
+
+  .bds-btn-ghost {
+    background: transparent;
+    border: 1px solid #333;
+    color: #ccc;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .bds-btn-ghost:hover {
+    border-color: #555;
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+  }
+
+  /* Mobile: full-width bordered cancel button (easy to see, hard to accidentally hit) */
+  .bds-btn-cancel {
+    background: transparent;
+    border: 1px solid rgba(255, 95, 86, 0.3);
+    color: #ff5f56;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 8px 0;
+    border-radius: 10px;
+    transition: background 0.2s, border-color 0.2s;
+    width: 100%;
+    text-align: center;
+  }
+
+  .bds-btn-cancel:hover {
+    background: rgba(255, 95, 86, 0.1);
+    border-color: rgba(255, 95, 86, 0.5);
+  }
+</style>

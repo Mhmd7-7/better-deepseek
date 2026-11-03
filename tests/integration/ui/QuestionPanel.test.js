@@ -1,0 +1,365 @@
+// @vitest-environment jsdom
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import QuestionPanel from "../../../src/content/ui/QuestionPanel.svelte";
+import { parseBdsMessage } from "../../../src/content/parser/index.js";
+import appState from "../../../src/content/state.js";
+import { resetAppState } from "../../helpers/app-state.js";
+import { renderSvelte, flushUi } from "../../helpers/svelte.js";
+
+describe("QuestionPanel integration", () => {
+  beforeEach(() => {
+    resetAppState({
+      ui: { showToast: vi.fn() },
+    });
+    document.body.innerHTML = `
+      <div class="ds-textarea">
+        <textarea id="chat-input"></textarea>
+      </div>
+      <button title="Send message"></button>
+    `;
+    document.querySelector('button[title="Send message"]').click = vi.fn();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("closes the question panel when leaving its conversation", async () => {
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+    const originalLocation = Object.getOwnPropertyDescriptor(window, "location");
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { href: "https://chat.deepseek.com/chat/s/first" },
+    });
+    try {
+      const questions = [{ id: "q1", question: "Pick one", type: "input" }];
+      appState.activeQuestions = questions;
+      window.dispatchEvent(new CustomEvent("bds-ask-questions", { detail: { questions } }));
+      await flushUi();
+      expect(document.querySelector(".bds-question-panel--hidden")).toBeNull();
+
+      window.location.href = "https://chat.deepseek.com/chat/s/second";
+      window.dispatchEvent(new CustomEvent("bds:questionNavigationPending"));
+      await flushUi();
+      expect(document.querySelector(".bds-question-panel--hidden")).not.toBeNull();
+      expect(appState.activeQuestions).toBe(questions);
+
+      window.dispatchEvent(new CustomEvent("bds:urlChanged"));
+      await flushUi();
+      expect(document.querySelector(".bds-question-panel--hidden")).not.toBeNull();
+      expect(appState.activeQuestions).toBeNull();
+    } finally {
+      Object.defineProperty(window, "location", originalLocation);
+      cleanup();
+    }
+  });
+
+  it("keeps questions opened in the destination conversation before the URL watcher fires", async () => {
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+    const originalLocation = Object.getOwnPropertyDescriptor(window, "location");
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { href: "https://chat.deepseek.com/chat/s/first" },
+    });
+    try {
+      const firstQuestions = [{ id: "q1", question: "First conversation", type: "input" }];
+      appState.activeQuestions = firstQuestions;
+      window.dispatchEvent(new CustomEvent("bds-ask-questions", { detail: { questions: firstQuestions } }));
+      await flushUi();
+
+      const questions = [{ id: "q2", question: "Still unanswered", type: "input" }];
+      window.location.href = "https://chat.deepseek.com/chat/s/second";
+      appState.activeQuestions = questions;
+      window.dispatchEvent(new CustomEvent("bds-ask-questions", { detail: { questions } }));
+      await flushUi();
+      expect(document.querySelector(".bds-question-panel--hidden")).toBeNull();
+      expect(document.querySelector(".bds-question-panel").textContent).toContain("Still unanswered");
+
+      window.dispatchEvent(new CustomEvent("bds:questionNavigationPending"));
+      await flushUi();
+      expect(document.querySelector(".bds-question-panel--hidden")).toBeNull();
+
+      window.dispatchEvent(new CustomEvent("bds:urlChanged"));
+      await flushUi();
+      expect(document.querySelector(".bds-question-panel--hidden")).toBeNull();
+      expect(appState.activeQuestions).toBe(questions);
+    } finally {
+      Object.defineProperty(window, "location", originalLocation);
+      cleanup();
+    }
+  });
+
+  it("renders questions, supports keyboard selection, and submits answers", async () => {
+    const { target, cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+
+    window.dispatchEvent(
+      new CustomEvent("bds-ask-questions", {
+        detail: {
+          questions: [
+            {
+              id: "q1",
+              question: "Pick one",
+              type: "test",
+              options: ["Alpha", "Beta"],
+            },
+          ],
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+    await flushUi();
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(document.querySelector("#chat-input").value).toContain("Beta");
+    expect(document.querySelector('button[title="Send message"]').click).toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("keeps option button clicks working", async () => {
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+
+    window.dispatchEvent(
+      new CustomEvent("bds-ask-questions", {
+        detail: {
+          questions: [
+            {
+              id: "q1",
+              question: "Pick one",
+              type: "single",
+              options: ["Alpha", "Beta"],
+            },
+          ],
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+    await flushUi();
+
+    document.querySelectorAll(".bds-option-item")[1].dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(document.querySelector("#chat-input").value).toContain("Beta");
+    expect(document.querySelector('button[title="Send message"]').click).toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("attaches to a contenteditable composer when no textarea is present", async () => {
+    document.body.innerHTML = `
+      <div class="composer-shell">
+        <div role="textbox" contenteditable="plaintext-only"></div>
+      </div>
+      <button title="Send message"></button>
+    `;
+    document.querySelector('button[title="Send message"]').click = vi.fn();
+
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+
+    window.dispatchEvent(
+      new CustomEvent("bds-ask-questions", {
+        detail: {
+          questions: [
+            {
+              id: "q1",
+              question: "Pick one",
+              type: "test",
+              options: ["Alpha", "Beta"],
+            },
+          ],
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+    await flushUi();
+
+    expect(document.querySelector(".bds-question-panel")?.parentElement?.classList.contains("composer-shell")).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(document.querySelector('[role="textbox"]').textContent).toContain("Beta");
+    expect(document.querySelector('button[title="Send message"]').click).toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("does not consume typing keys while a panel input is focused", async () => {
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+
+    window.dispatchEvent(
+      new CustomEvent("bds-ask-questions", {
+        detail: {
+          questions: [
+            {
+              id: "q1",
+              question: "Explain",
+              type: "input",
+            },
+          ],
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+    await flushUi();
+
+    const input = document.querySelector(".bds-text-input");
+    input.focus();
+    const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    cleanup();
+  });
+
+  it("collapses from the footer and restores an unfinished answer", async () => {
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+
+    window.dispatchEvent(new CustomEvent("bds-ask-questions", {
+      detail: { questions: [{ id: "q1", question: "Explain", type: "input" }] },
+    }));
+    await flushUi();
+
+    const input = document.querySelector(".bds-text-input");
+    input.value = "A draft answer";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const toggle = document.querySelector(".bds-collapse-btn");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    toggle.click();
+    await flushUi();
+
+    expect(document.querySelector(".bds-question-panel--hidden")).toBeNull();
+    expect(document.querySelector(".bds-question-body")).toBeNull();
+    expect(document.querySelector(".bds-question-footer")).not.toBeNull();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    expect(document.querySelector('button[title="Send message"]').click).not.toHaveBeenCalled();
+
+    toggle.click();
+    await flushUi();
+    expect(document.querySelector(".bds-text-input").value).toBe("A draft answer");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    cleanup();
+  });
+
+  it("focuses free text input from wrapper clicks without leaking to composer", async () => {
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+
+    window.dispatchEvent(
+      new CustomEvent("bds-ask-questions", {
+        detail: {
+          questions: [
+            {
+              id: "q1",
+              question: "Explain",
+              type: "input",
+            },
+          ],
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+    await flushUi();
+
+    const composerPointerDown = vi.fn();
+    document.querySelector(".ds-textarea").addEventListener("pointerdown", composerPointerDown);
+    const wrapper = document.querySelector(".bds-free-input-wrapper");
+    const input = document.querySelector(".bds-text-input");
+    document.querySelector("#chat-input").focus();
+
+    wrapper.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+    wrapper.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.advanceTimersByTimeAsync(0);
+    await flushUi();
+
+    expect(document.activeElement).toBe(input);
+    expect(composerPointerDown).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("focuses custom answer input when clicking the custom option row", async () => {
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+
+    window.dispatchEvent(
+      new CustomEvent("bds-ask-questions", {
+        detail: {
+          questions: [
+            {
+              id: "q1",
+              question: "Pick one",
+              type: "single",
+              options: ["Alpha", "Beta"],
+              allowCustom: true,
+            },
+          ],
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+    await flushUi();
+
+    const row = document.querySelector(".custom-item");
+    const input = row.querySelector(".bds-custom-text-input");
+    document.querySelector("#chat-input").focus();
+
+    row.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.advanceTimersByTimeAsync(0);
+    await flushUi();
+
+    expect(document.activeElement).toBe(input);
+
+    input.value = "Gamma";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+    document.querySelector(".bds-custom-confirm").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(document.querySelector("#chat-input").value).toContain("Gamma");
+    expect(document.querySelector('button[title="Send message"]').click).toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("shows the formula source instead of the raw KaTeX markup (issue #209)", async () => {
+    const katex = [
+      '<span class="katex"><span class="katex-mathml">',
+      '<math><semantics><mrow><mi>a</mi><mi>b</mi></mrow>',
+      '<annotation encoding="application/x-tex">ab</annotation></semantics></math>',
+      '</span><span class="katex-html" aria-hidden="true">',
+      '<span class="base">ab</span></span></span>',
+    ].join("");
+    const payload = JSON.stringify([
+      { id: "q1", question: `String ${katex}. What follows?`, type: "test", options: ["Yes"] },
+    ]);
+    const parsed = parseBdsMessage(`<BDS:ask_question>${payload}</BDS:ask_question>`);
+
+    const { cleanup } = renderSvelte(QuestionPanel);
+    await flushUi();
+    window.dispatchEvent(
+      new CustomEvent("bds-ask-questions", { detail: { questions: parsed.askQuestions } }),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+    await flushUi();
+
+    const heading = document.querySelector(".bds-question-header h3");
+    expect(heading.textContent).toBe("String ab. What follows?");
+    expect(heading.querySelector("span")).toBeNull();
+    cleanup();
+  });
+});

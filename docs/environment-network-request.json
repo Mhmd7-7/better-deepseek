@@ -1,0 +1,7 @@
+{
+  "network": {
+    "additional_allowed_domains": ["cdn.playwright.dev"]
+  },
+  "reason": "Download the standard Playwright Chromium for the real extension-loading test",
+  "state": "proposed_not_saved"
+}
