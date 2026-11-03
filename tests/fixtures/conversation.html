@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Conversation fixture</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 24px 20px 160px; background: #f6f7fb; color: #202431; font: 16px/1.6 system-ui; }
+      main { max-width: 760px; margin: auto; }
+      .ds-message { padding: 24px; margin: 16px 0; background: white; border: 1px solid #dce0e9; border-radius: 18px; }
+      .composer { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; background: white; border-top: 1px solid #dce0e9; }
+      textarea { display: block; width: min(680px, 100%); min-height: 48px; margin: auto; padding: 12px; font: inherit; }
+      #bds-toggle { position: fixed; top: 12px; right: 12px; padding: 12px; }
+      #settings-panel { position: fixed; top: 70px; right: 12px; padding: 20px; background: white; border: 1px solid #ddd; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Better DeepSeek</h1>
+      <section id="messages">
+        <article class="ds-message"><div class="ds-markdown">How can I organize a project with Better DeepSeek?</div></article>
+        <article class="ds-message"><div class="ds-markdown">ابدأ بتحديد أهداف المشروع، ثم قسّم العمل إلى خطوات واضحة.</div></article>
+        <article class="ds-message"><div class="ds-markdown">Save your favorite prompts and reuse them in each project.</div></article>
+      </section>
+    </main>
+    <button id="bds-toggle" type="button">BDS</button>
+    <div id="settings-panel" hidden>Settings opened</div>
+    <div class="composer"><textarea id="chat-input" placeholder="Message DeepSeek"></textarea></div>
+    <script>
+      document.querySelector('#bds-toggle').addEventListener('click', () => {
+        document.querySelector('#settings-panel').hidden = !document.querySelector('#settings-panel').hidden;
+      });
+    </script>
+  </body>
+</html>

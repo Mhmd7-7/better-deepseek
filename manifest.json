@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better DeepSeek",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Enhanced UX layer for DeepSeek with hidden prompts, tools, memory, document generation, and long-work packaging.",
   "permissions": [
     "storage",
@@ -20,10 +20,12 @@
         "https://chat.deepseek.com/*"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "enhancements/quick-access.js"
       ],
       "css": [
-        "content.css"
+        "content.css",
+        "enhancements/quick-access.css"
       ],
       "run_at": "document_start"
     }

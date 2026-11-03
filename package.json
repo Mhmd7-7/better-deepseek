@@ -1,0 +1,12 @@
+{
+  "name": "better-deepseek-chrome",
+  "version": "0.1.16",
+  "private": true,
+  "description": "Packaged Chrome extension with a local quick-access interface",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}
