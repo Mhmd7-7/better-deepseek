@@ -1,10 +1,11 @@
 {
   "name": "better-deepseek-chrome",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "private": true,
   "description": "Packaged Chrome extension with a local quick-access interface",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "package:extension": "python3 scripts/package.py"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1"

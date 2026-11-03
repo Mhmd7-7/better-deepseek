@@ -25,6 +25,7 @@ async function load(page, locale = "en") {
   await page.route("https://chat.deepseek.com/**", (route) => route.fulfill({ contentType: "text/html", body: fixture }));
   await page.goto("https://chat.deepseek.com/");
   await page.addStyleTag({ path: styles });
+  await page.addScriptTag({ path: path.join(root, "enhancements/conversation-tools.js") });
   await page.addScriptTag({ path: script });
 }
 
@@ -40,9 +41,11 @@ test("launcher, keyboard shortcut, modal focus trap and focus restoration", asyn
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByRole("searchbox")).toBeFocused();
   await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("tab", { name: /^Messages/ })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
   await expect(page.getByRole("button", { name: "Close", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("button", { name: "Latest message", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Save messages as JSON", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.locator("#chat-input")).toBeFocused();
@@ -182,4 +185,186 @@ test("outside click dismisses the dialog; duplicate loading creates no extra lau
   await page.mouse.click(1, 1);
   await expect(page.getByRole("dialog")).not.toBeVisible();
   await expect(page.locator(".bds-qa-launcher")).toBeFocused();
+});
+
+async function addCode(page, content, filename = "example.py", language = "python") {
+  await page.evaluate(({ content, filename, language }) => {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.className = `language-${language}`;
+    code.dataset.filename = filename;
+    code.textContent = content;
+    pre.append(code);
+    document.querySelector(".ds-message:last-child .ds-markdown").append(pre);
+  }, { content, filename, language });
+}
+
+test("code files are searchable by filename, language and text without executing markup", async ({ page }) => {
+  await load(page);
+  await addCode(page, 'print("مرحبا")\n# <img src=x onerror="window.injected=true">', "greeting.py");
+  await open(page);
+  await page.getByRole("tab", { name: /^Code files/ }).click();
+  await expect(page.locator(".bds-qa-file h3")).toHaveText("greeting.py");
+  await expect(page.locator(".bds-qa-file img")).toHaveCount(0);
+  for (const query of ["greeting.py", "python", "مرحبا"]) {
+    await page.getByRole("searchbox").fill(query);
+    await expect(page.locator(".bds-qa-file")).toHaveCount(1);
+  }
+  await page.getByRole("searchbox").fill("no code here");
+  await expect(page.getByRole("status")).toHaveText("No matching code files");
+  await page.getByRole("tab", { name: /^Messages/ }).click();
+  await page.getByRole("searchbox").fill("project");
+  await page.getByRole("tab", { name: /^Code files/ }).click();
+  await expect(page.getByRole("searchbox")).toHaveValue("no code here");
+  await page.getByRole("tab", { name: /^Code files/ }).click();
+  await expect(page.getByRole("searchbox")).toHaveValue("no code here");
+  expect(await page.evaluate(() => window.injected)).toBeUndefined();
+});
+
+test("downloads contain the complete original code and safe filenames", async ({ page }) => {
+  await load(page);
+  const content = '# ملف عربي\n' + '    print("exact indentation and newlines")\n'.repeat(100);
+  await addCode(page, content, "../../CON.py");
+  await open(page);
+  await page.getByRole("tab", { name: /^Code files/ }).click();
+  await expect(page.locator(".bds-qa-file pre")).not.toHaveText(content);
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download file", exact: true }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toMatch(/^code-\d+-1\.py$/);
+  expect(fs.readFileSync(await download.path(), "utf8")).toBe(content);
+  await expect(page.locator(".bds-qa-feedback")).toHaveText("Download started");
+});
+
+test("copy uses the complete code and clipboard failures give a recovery action", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await load(page);
+  const content = 'print("مرحبا")\n'.repeat(150);
+  await addCode(page, content);
+  await open(page);
+  await page.getByRole("tab", { name: /^Code files/ }).click();
+  await page.getByRole("button", { name: "Copy code", exact: true }).click();
+  await expect(page.locator(".bds-qa-feedback")).toHaveText("Code copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(content);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+      writeText: async () => { throw new Error("Clipboard denied"); },
+    } });
+  });
+  await page.getByRole("button", { name: "Copy code", exact: true }).click();
+  await expect(page.locator(".bds-qa-feedback")).toContainText("Copy failed");
+  await expect(page.getByRole("button", { name: "Download file", exact: true })).toBeEnabled();
+});
+
+test("filtered JSON export includes every match beyond the preview limit and correct roles", async ({ page }) => {
+  await load(page);
+  await page.evaluate(() => {
+    const messages = document.querySelector("#messages");
+    for (let i = 0; i < 70; i++) {
+      const message = document.createElement("article");
+      message.className = "ds-message";
+      message.dataset.role = i % 2 ? "assistant" : "user";
+      message.textContent = `Export match ${i}`;
+      messages.append(message);
+    }
+  });
+  await open(page);
+  await page.getByRole("searchbox").fill("EXPORT MATCH");
+  await expect(page.locator(".bds-qa-result")).toHaveCount(50);
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save messages as JSON", exact: true }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("better-deepseek-messages.json");
+  const data = JSON.parse(fs.readFileSync(await download.path(), "utf8"));
+  expect(data.messages).toHaveLength(70);
+  expect(data.messages[0]).toEqual({ role: "user", text: "Export match 0" });
+  expect(data.messages[69]).toEqual({ role: "assistant", text: "Export match 69" });
+});
+
+test("Markdown export preserves Arabic text and only exports matching messages", async ({ page }) => {
+  await load(page, "ar");
+  await open(page);
+  await page.getByRole("searchbox").fill("المشروع");
+  await expect(page.locator(".bds-qa-result")).toHaveCount(1);
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "حفظ الرسائل بصيغة Markdown", exact: true }).click();
+  const download = await downloading;
+  const content = fs.readFileSync(await download.path(), "utf8");
+  expect(content).toContain("ابدأ بتحديد أهداف المشروع");
+  expect(content).not.toContain("Save your favorite prompts");
+  expect(content).not.toContain("حفظ الرسائل");
+});
+
+test("search reuses indexed messages and only reads changed text", async ({ page }) => {
+  await load(page);
+  await page.evaluate(() => {
+    window.textReads = [0, 0, 0];
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "innerText");
+    document.querySelectorAll(".ds-markdown").forEach((body, i) => Object.defineProperty(body, "innerText", {
+      get() { window.textReads[i]++; return descriptor.get.call(this); },
+    }));
+  });
+  await open(page);
+  for (const query of ["project", "prompts", "المشروع"]) {
+    await page.getByRole("searchbox").fill(query);
+    await expect(page.locator(".bds-qa-result")).toHaveCount(query === "project" ? 2 : 1);
+  }
+  expect(await page.evaluate(() => window.textReads)).toEqual([1, 1, 1]);
+  await page.evaluate(() => { document.querySelectorAll(".ds-markdown")[1].textContent = "Changed message"; });
+  await page.getByRole("searchbox").fill("Changed");
+  await expect(page.locator(".bds-qa-result")).toHaveCount(1);
+  await expect(page.locator(".bds-qa-result")).toContainText("Changed message");
+  expect(await page.evaluate(() => window.textReads)).toEqual([1, 2, 1]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await open(page);
+  expect(await page.evaluate(() => window.textReads)).toEqual([2, 3, 2]);
+});
+
+test("result focus stays on the same message when an earlier match disappears", async ({ page }) => {
+  await load(page);
+  await open(page);
+  await page.getByRole("searchbox").fill("project");
+  await expect(page.locator(".bds-qa-result")).toHaveCount(2);
+  await page.locator(".bds-qa-result").last().focus();
+  await page.evaluate(() => { document.querySelector(".ds-message").remove(); });
+  await expect(page.locator(".bds-qa-result")).toHaveCount(1);
+  await expect(page.locator(".bds-qa-result")).toBeFocused();
+  await expect(page.locator(".bds-qa-result")).toContainText("favorite prompts");
+});
+
+test("code previews update during streaming and empty tabs support Arabic keyboard navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await load(page, "ar");
+  await open(page);
+  await page.getByRole("tab", { name: /^الرسائل/ }).focus();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("tab", { name: /^ملفات الأكواد/ })).toBeFocused();
+  await expect(page.getByRole("status")).toHaveText("لا توجد أكواد في الرسائل المحمّلة");
+  await addCode(page, 'print("first")', "مشروع.py");
+  await expect(page.locator(".bds-qa-file")).toHaveCount(1);
+  await page.getByRole("button", { name: "تنزيل الملف", exact: true }).focus();
+  await page.evaluate(() => { document.querySelector("pre code").textContent += '\nprint("second")'; });
+  await expect(page.locator(".bds-qa-file pre")).toContainText("second");
+  await expect(page.getByRole("button", { name: "تنزيل الملف", exact: true })).toBeFocused();
+  const bounds = await page.getByRole("dialog").boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+  await page.screenshot({ path: test.info().outputPath("arabic-files-mobile.png") });
+});
+
+test("a clipboard operation finishing after reopening does not show stale feedback", async ({ page }) => {
+  await load(page);
+  await addCode(page, "print(1)");
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+    writeText: () => new Promise((resolve) => { window.finishCopy = resolve; }),
+  } }));
+  await open(page);
+  await page.getByRole("tab", { name: /^Code files/ }).click();
+  await page.getByRole("button", { name: "Copy code", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await open(page);
+  await page.evaluate(() => window.finishCopy());
+  await expect(page.locator(".bds-qa-feedback")).toBeEmpty();
 });

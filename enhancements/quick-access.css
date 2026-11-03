@@ -99,6 +99,22 @@ html[data-theme="light"] #bds-quick-access {
 #bds-quick-access .bds-qa-brand { display: block; color: var(--qa-accent); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
 #bds-quick-access h2 { margin: 6px 0; font: inherit; font-weight: 700; font-size: 24px; line-height: 1.4; }
 #bds-quick-access .bds-qa-header p { margin: 0; color: var(--qa-muted); }
+#bds-quick-access .bds-qa-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 5px; margin-top: 20px; border-radius: 14px; background: var(--qa-surface); }
+#bds-quick-access .bds-qa-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px; border: 1px solid transparent; border-radius: 10px; background: transparent; }
+#bds-quick-access .bds-qa-tabs [aria-selected="true"] { background: var(--qa-bg); border-color: var(--qa-border); color: var(--qa-accent); font-weight: 650; }
+#bds-quick-access .bds-qa-badge { min-width: 22px; padding: 1px 5px; border-radius: 6px; background: var(--qa-surface); font-size: 11px; font-variant-numeric: tabular-nums; }
+#bds-quick-access .bds-qa-export { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 16px 0 12px; padding-top: 12px; border-top: 1px solid var(--qa-border); }
+#bds-quick-access .bds-qa-export > span { flex: 1; min-width: 110px; color: var(--qa-muted); font-size: 12px; }
+#bds-quick-access .bds-qa-export button,
+#bds-quick-access .bds-qa-file button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--qa-border); border-radius: 10px; background: var(--qa-surface); }
+#bds-quick-access .bds-qa-file-results { display: grid; gap: 12px; }
+#bds-quick-access .bds-qa-file { min-width: 0; padding: 14px; border: 1px solid var(--qa-border); border-radius: 14px; }
+#bds-quick-access .bds-qa-file h3 { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+#bds-quick-access .bds-qa-file-meta { color: var(--qa-muted); font-size: 12px; }
+#bds-quick-access .bds-qa-file pre { max-height: 160px; padding: 12px; margin: 12px 0; overflow: auto; border-radius: 8px; background: var(--qa-surface); font: 12px/1.6 ui-monospace, monospace; white-space: pre; text-align: left; tab-size: 4; }
+#bds-quick-access .bds-qa-file > div { display: flex; flex-wrap: wrap; gap: 8px; }
+#bds-quick-access .bds-qa-feedback { padding: 10px; border-radius: 8px; background: var(--qa-surface); color: var(--qa-text); }
+#bds-quick-access .bds-qa-feedback:empty { display: none; }
 #bds-quick-access .bds-qa-close {
   display: grid;
   place-items: center;
