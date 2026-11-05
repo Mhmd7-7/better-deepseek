@@ -1,0 +1,12 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# Local runtime artifacts (browser profiles, office profiles, caches)
+.browser-profile/
+.libreoffice-profile/
+__pycache__/
+*.pyc
+.upload-tmp/

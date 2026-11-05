@@ -1,0 +1,66 @@
+#bds-voice-panel {
+  --voice-bg: var(--bds-bg-panel, #fff);
+  --voice-surface: var(--bds-bg-elevated, #f3f5fa);
+  --voice-text: var(--bds-text-primary, #202638);
+  --voice-muted: var(--bds-text-secondary, #5d6577);
+  --voice-border: var(--bds-border, #dbe1ec);
+  --voice-accent: var(--bds-accent, #3758d9);
+  position: relative; z-index: 2147483647; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  #bds-voice-panel { --voice-bg: var(--bds-bg-panel, #171b26); --voice-surface: var(--bds-bg-elevated, #222938); --voice-text: var(--bds-text-primary, #f1f4fc); --voice-muted: var(--bds-text-secondary, #b4bdcf); --voice-border: var(--bds-border, #3d465b); --voice-accent: var(--bds-accent, #a8b9ff); color-scheme: dark; }
+}
+html.dark #bds-voice-panel, html[data-theme="dark"] #bds-voice-panel { --voice-bg: var(--bds-bg-panel, #171b26); --voice-surface: var(--bds-bg-elevated, #222938); --voice-text: var(--bds-text-primary, #f1f4fc); --voice-muted: var(--bds-text-secondary, #b4bdcf); --voice-border: var(--bds-border, #3d465b); --voice-accent: var(--bds-accent, #a8b9ff); color-scheme: dark; }
+html.light #bds-voice-panel, html[data-theme="light"] #bds-voice-panel { --voice-bg: var(--bds-bg-panel, #fff); --voice-surface: var(--bds-bg-elevated, #f3f5fa); --voice-text: var(--bds-text-primary, #202638); --voice-muted: var(--bds-text-secondary, #5d6577); --voice-border: var(--bds-border, #dbe1ec); --voice-accent: var(--bds-accent, #3758d9); color-scheme: light; }
+#bds-voice-panel *, #bds-voice-panel *::before, #bds-voice-panel *::after { box-sizing: border-box; }
+#bds-voice-panel [hidden] { display: none !important; }
+#bds-voice-panel dialog { width: min(490px, calc(100vw - 28px)); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; padding: 24px; border: 1px solid var(--voice-border); border-radius: 22px; background: var(--voice-bg); color: var(--voice-text); font-family: inherit; font-size: 14px; line-height: 1.65; box-shadow: 0 24px 90px #0005; text-align: start; }
+#bds-voice-panel dialog::backdrop { background: #10132288; backdrop-filter: blur(4px); }
+#bds-voice-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+#bds-voice-panel .bds-voice-eyebrow { display: block; color: var(--voice-accent); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+#bds-voice-panel h2 { margin: 4px 0; font-size: 22px; line-height: 1.4; }
+#bds-voice-panel h3 { margin: 0 0 6px; font-size: 14px; }
+#bds-voice-panel [data-subtitle] { margin: 0; font-size: 12px; }
+#bds-voice-panel .bds-voice-block { padding: 14px; border: 1px solid var(--voice-border); border-radius: 14px; background: var(--voice-surface); margin: 14px 0; }
+#bds-voice-panel label { display: grid; gap: 8px; margin: 12px 0; font-weight: 600; }
+#bds-voice-panel select { width: 100%; min-height: 44px; padding: 9px; border-radius: 10px; border: 1px solid var(--voice-border); background: var(--voice-bg); color: inherit; font: inherit; }
+#bds-voice-panel textarea, #bds-voice-panel [data-custom-tag] { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--voice-border); border-radius: 9px; background: var(--voice-bg); color: var(--voice-text); font: inherit; font-weight: 400; resize: vertical; }
+#bds-voice-panel [data-custom-language] { padding: 10px; border: 1px solid var(--voice-border); border-radius: 10px; margin-bottom: 10px; }
+#bds-voice-panel .bds-voice-rate { display: flex; align-items: center; gap: 14px; }
+#bds-voice-panel input { min-width: 0; width: 100%; min-height: 32px; accent-color: var(--voice-accent); }
+#bds-voice-panel output { flex-shrink: 0; min-width: 50px; font-size: 13px; font-variant-numeric: tabular-nums; text-align: center; padding: 3px 6px; background: var(--voice-bg); border-radius: 6px; }
+#bds-voice-panel p { font-size: 12px; color: var(--voice-muted); }
+#bds-voice-panel small { display: block; font-size: 11px; color: var(--voice-muted); }
+#bds-voice-panel .bds-voice-check { display: flex; align-items: center; gap: 9px; margin: 10px 0; font-weight: 600; }
+#bds-voice-panel .bds-voice-check input { width: auto; min-height: auto; flex: 0 0 auto; }
+#bds-voice-panel [data-voice-availability][data-available="false"] { color: #b87727; }
+#bds-voice-panel [data-native-support][data-state="available"] { color: var(--voice-muted); }
+#bds-voice-panel [data-native-support][data-state="fallback"],
+#bds-voice-panel [data-native-support][data-state="missing"] { color: #b87727; }
+#bds-voice-panel button, .bds-voice-button { min-height: 42px; padding: 7px 12px; border: 1px solid var(--voice-border, var(--bds-border, #64748b)); border-radius: 10px; background: var(--voice-bg, var(--bds-bg-elevated, #1e293b)); color: var(--voice-text, var(--bds-text-primary, #f8fafc)); font: inherit; cursor: pointer; }
+#bds-voice-panel button:disabled { opacity: .55; cursor: default; }
+#bds-voice-panel button:hover:not(:disabled), .bds-voice-button:hover { border-color: var(--voice-accent, var(--bds-accent, #5b7bff)); }
+#bds-voice-panel [data-close] { display: grid; place-items: center; flex: 0 0 40px; min-height: 40px; padding: 0; font-size: 24px; }
+#bds-voice-panel :focus-visible, .bds-voice-button:focus-visible { outline: 2px solid var(--voice-accent, var(--bds-accent, #5b7bff)); outline-offset: 3px; }
+.bds-voice-button { margin-inline-start: auto; flex-shrink: 0; align-self: flex-start; font-size: 12px; min-height: 34px; }
+#bds-voice-panel .bds-voice-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#bds-voice-panel [data-inspect-native] { background: var(--voice-accent); color: var(--voice-bg); border-color: var(--voice-accent); font-weight: 650; }
+#bds-voice-panel [data-inspect-native], #bds-voice-panel [data-diagnostics] { width: 100%; }
+#bds-voice-panel [data-native-status] { margin: 10px 0; padding: 9px 11px; border-inline-start: 3px solid var(--voice-accent); border-radius: 6px; background: var(--voice-bg); color: var(--voice-text); overflow-wrap: anywhere; }
+#bds-voice-panel [data-native-status][data-code="ambiguous"],
+#bds-voice-panel [data-native-status][data-code="identity-unverified"],
+#bds-voice-panel [data-native-status][data-code="missing"] { border-inline-start-color: #b87727; }
+#bds-voice-panel [data-status] { min-height: 1.4em; margin: 12px 0 4px; color: var(--voice-text); }
+#bds-voice-panel [data-locale-hint] { margin-bottom: 10px; }
+/* The native Live controller owns this status region and its action handlers. */
+.bds-native-live-audio { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 12px; max-width: 100%; min-width: 0; padding: 12px 14px; margin: 10px 0; border: 1px solid var(--bds-border, #64748b); border-radius: 14px; background: var(--bds-bg-elevated, #1e293b); color: var(--bds-text-primary, #f8fafc); font: 13px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; text-align: start; }
+.bds-native-live-audio[hidden] { display: none !important; }
+.bds-native-live-audio [hidden] { display: none !important; }
+.bds-native-live-audio > p, .bds-native-live-audio [role="status"], .bds-native-live-audio [data-native-status] { flex: 1 1 210px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.bds-native-live-audio .bds-native-live-audio__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bds-native-live-audio button { flex: 0 1 auto; min-height: 38px; max-width: 100%; padding: 7px 12px; border: 1px solid var(--bds-accent, #7b95ff); border-radius: 9px; background: transparent; color: var(--bds-text-primary, #f8fafc); font: inherit; font-weight: 650; cursor: pointer; overflow-wrap: anywhere; }
+.bds-native-live-audio button:hover:not(:disabled) { background: var(--bds-accent-glow, #7b95ff22); }
+.bds-native-live-audio button:focus-visible { outline: 2px solid var(--bds-accent, #7b95ff); outline-offset: 3px; }
+.bds-native-live-audio button:disabled { opacity: .55; cursor: default; }
+.bds-native-live-audio[data-code="ambiguous"], .bds-native-live-audio[data-code="identity-unverified"], .bds-native-live-audio[data-code="missing"] { border-color: #b87727; }
+@media (max-width: 420px) { #bds-voice-panel dialog { padding: 18px 16px; } #bds-voice-panel h2 { font-size: 20px; } #bds-voice-panel .bds-voice-actions button { flex: 1 1 auto; } .bds-native-live-audio { padding: 10px; gap: 8px; } .bds-native-live-audio button { flex: 1 1 130px; } .bds-native-live-audio .bds-native-live-audio__actions { width: 100%; } }

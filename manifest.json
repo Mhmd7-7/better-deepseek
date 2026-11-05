@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Better DeepSeek",
-  "version": "0.1.15",
+  "version": "0.2.0",
   "description": "Enhanced UX layer for DeepSeek with hidden prompts, tools, memory, document generation, and long-work packaging.",
   "permissions": [
     "storage",
@@ -20,10 +20,18 @@
         "https://chat.deepseek.com/*"
       ],
       "js": [
-        "content.js"
+        "enhancements/speech-languages.js",
+        "enhancements/live-audio.js",
+        "enhancements/voice-panel.js",
+        "content.js",
+        "enhancements/deepseek-voice.js",
+        "enhancements/conversation-tools.js",
+        "enhancements/quick-access.js"
       ],
       "css": [
-        "content.css"
+        "content.css",
+        "enhancements/quick-access.css",
+        "enhancements/voice-panel.css"
       ],
       "run_at": "document_start"
     }
@@ -34,7 +42,10 @@
         "injected.js",
         "sandbox.html",
         "sandbox.js",
-        "static/loading/*.svg"
+        "static/loading/*.svg",
+        "task-sandbox.html",
+        "task-sandbox.js",
+        "task-worker.js"
       ],
       "matches": [
         "https://chat.deepseek.com/*"
@@ -42,11 +53,12 @@
     }
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "enhancements/service-worker.js"
   },
   "sandbox": {
     "pages": [
-      "sandbox.html"
+      "sandbox.html",
+      "task-sandbox.html"
     ]
   },
   "action": {
@@ -54,6 +66,7 @@
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'",
-    "sandbox": "sandbox allow-scripts allow-forms allow-popups; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; object-src 'self'"
-  }
+    "sandbox": "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-eval' blob:; worker-src blob:; connect-src 'none'; img-src data:; style-src 'unsafe-inline'"
+  },
+  "version_name": "0.2.0 preview"
 }

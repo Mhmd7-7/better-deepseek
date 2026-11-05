@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Native Read aloud — isolated DOM fixture</title>
+<link rel="stylesheet" href="../enhancements/voice-panel.css">
+<style>body{font:16px system-ui;padding:20px} [data-virtual-list-item-key]{padding:12px;border:1px solid #ccc;margin:12px} [role=button]{display:inline-block;padding:10px;border:1px solid #888;cursor:pointer}</style>
+<script>
+// Synthetic DOM/media signals, not a DeepSeek runtime capture. Never sends a
+// request, runs a microphone, generates speech, or touches a user's profile.
+const stored={bds_settings:{liveNativeAutoRead:true}};const changes=new Set();
+globalThis.chrome={storage:{local:{async get(key){return {[key]:structuredClone(stored[key])}},async set(patch){Object.assign(stored,patch);for(const fn of changes)fn({bds_settings:{newValue:stored.bds_settings}},'local')}},onChanged:{addListener(fn){changes.add(fn)},removeListener(fn){changes.delete(fn)}}}};
+</script></head><body><h1>Isolated native-control contract tests</h1><main id="messages"></main>
+<script src="../enhancements/deepseek-voice.js"></script>
+<script>
+window.fixture=(()=>{
+ let session=null,active=true,turn=0,clicks=0,held=false,holds=0,releases=0,ended=0,mediaMode='none';
+ const dispatch=(detail)=>window.dispatchEvent(new CustomEvent('bds:native-generation',{detail:JSON.stringify({sessionId:'fixture-session',...detail})}));
+ const options={isCurrent:()=>active,onHold(){held=true;holds++},onRelease(){held=false;releases++},onGenerationEnd(){ended++}};
+ // File fixtures cannot supply the saved-conversation route. An explicit URL
+ // read-only proxy is installed before evaluating the controller by the runner.
+ const api=()=>BDSDeepSeekVoice;
+ function start(){active=true;session=api().startLive(options);return snapshot()}
+ function begin(prompt='مرحبا'){turn++;session.beginTurn({turnId:'t'+turn,prompt});dispatch({phase:'start',liveTurnId:'t'+turn,requestId:'r'+turn,version:'r'+turn});return snapshot()}
+ function row(key='opaque-row-'+turn,{stream=true,disabled=false,button=true,media=mediaMode,body='Hello — مرحبًا'}={}){
+  const row=document.createElement('article');row.setAttribute('data-virtual-list-item-key',key);
+  const content=document.createElement('div');content.className='ds-assistant-message-main-content ds-message';content.dataset.bdsMsgId='msg-random-'+Math.random();content.textContent=body;
+  if(stream){const cursor=document.createElement('span');cursor.className='ds-cursor';content.append(cursor)}
+  const toolbar=document.createElement('div');toolbar.setAttribute('role','toolbar');row.append(content,toolbar);
+  if(button)addButton(row,{disabled,media});document.querySelector('#messages').append(row);return row;
+ }
+ function addButton(row,{disabled=false,media='none'}={}){
+  const toolbar=row.querySelector('[role=toolbar]');const button=document.createElement('div');button.setAttribute('role','button');button.setAttribute('aria-label','Read aloud');button.setAttribute('aria-disabled',String(disabled));button.tabIndex=0;button.textContent='Read aloud';
+  button.addEventListener('click',()=>{clicks++;if(media==='observable'){
+    let audio=toolbar.querySelector('audio');if(!audio){audio=document.createElement('audio');let paused=true,finished=false;Object.defineProperty(audio,'paused',{get:()=>paused});Object.defineProperty(audio,'ended',{get:()=>finished});audio.pause=()=>{paused=true;audio.dispatchEvent(new Event('pause'))};audio.finish=()=>{paused=true;finished=true;audio.dispatchEvent(new Event('ended'))};audio.testPlay=()=>{paused=false;finished=false;audio.dispatchEvent(new Event('playing'))};toolbar.append(audio);queueMicrotask(()=>audio.testPlay());} else audio.testPlay();
+   }});toolbar.append(button);return button;
+ }
+ function complete(id='server-'+turn){dispatch({phase:'completed',requestId:'r'+turn,version:'r'+turn,messageId:id});return snapshot()}
+ function finishDOM(key='opaque-row-'+turn){document.querySelectorAll(`[data-virtual-list-item-key="${key}"] .ds-cursor`).forEach(n=>n.remove());}
+ function snapshot(){return {clicks,held,holds,releases,ended,status:api().status,diagnostics:api().diagnostics(),ui:document.querySelector('.bds-native-live-audio')?.textContent||''}}
+ function siteToast(message){const node=document.createElement('div');node.setAttribute('role','alert');node.textContent=message;document.body.append(node);return message}
+ function playbackEvent(state,kind='webaudio'){window.dispatchEvent(new CustomEvent('bds:native-playback',{detail:JSON.stringify({state,turnId:'t'+turn,kind,at:Date.now()})}));return snapshot()}
+ function setHref(href){window.__nativeFixtureLocation.href=href;return href}
+ function stop(){session.stop('test-end');active=false;return snapshot()}
+ return {start,begin,row,addButton,complete,finishDOM,snapshot,stop,setHref,playbackEvent,siteToast,dispatch,api,session:()=>session,mode:(value)=>mediaMode=value};
+})();
+</script></body></html>

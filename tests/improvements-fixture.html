@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BDS — isolated UI verification</title>
+<link rel="stylesheet" href="../enhancements/quick-access.css">
+<link rel="stylesheet" href="../enhancements/voice-panel.css">
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#11151e;color:#edf1fa;font:15px/1.8 system-ui,"Segoe UI",sans-serif}.fixture{width:min(880px,calc(100% - 40px));margin:40px auto}.fixture-brand{color:#a8b9ff;font-size:13px;letter-spacing:.1em}h1{font-size:27px;margin:8px 0}.fixture-note{padding:12px 18px;border:1px solid #39435b;border-radius:12px;color:#c1cbdf;font-size:13px}.ds-message{padding:18px 22px;background:#1d2433;border:1px solid #30394c;border-radius:16px;margin:18px 0}.ds-message[data-role="user"]{background:#253048}pre{direction:ltr;text-align:left;background:#111722;padding:12px;border-radius:8px;overflow:auto}#chat-input{width:100%;margin-top:18px;background:#1d2433;color:#edf1fa;border:1px solid #4c5875;border-radius:14px;padding:16px;font:inherit}#bds-toggle{border:1px solid #586b9b;background:#263457;color:#edf1fa;border-radius:10px;padding:10px 16px;font:inherit}html.light{color-scheme:light}html.light body{background:#f0f3f9;color:#202638}html.light .ds-message{background:white;color:#202638}
+</style>
+<script>
+/* Controlled sample data and storage only. UI scripts below are the shipped extension files. */
+(() => {
+  const stored = { bds_settings: { locale: 'ar', voiceLanguage: 'ar-SA', voiceLanguageChosen: true } };
+  const storageListeners = [];
+  let lastCopy = null;
+
+  globalThis.chrome = {
+    runtime: { getManifest: () => ({ version: '0.2.0-test' }) },
+    storage: {
+      local: {
+        async get(key) { const keys = Array.isArray(key) ? key : [key]; const result = {}; for (const item of keys) result[item] = structuredClone(stored[item]); return result; },
+        async set(value) { const changes = {}; for (const [key, next] of Object.entries(value)) { changes[key] = { newValue: structuredClone(next), oldValue: stored[key] }; stored[key] = structuredClone(next); } storageListeners.forEach((fn) => fn(changes, 'local')); },
+      },
+      onChanged: { addListener(fn) { storageListeners.push(fn); } },
+    },
+  };
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text) => { lastCopy = text; } } });
+  globalThis.fixture = {
+    get clipboard() { return lastCopy; },
+    get settings() { return structuredClone(stored.bds_settings || {}); },
+    setTheme(value) { document.documentElement.className = value; },
+  };
+})();
+</script>
+</head>
+<body>
+<main class="fixture">
+<span class="fixture-brand" dir="ltr">BETTER DEEPSEEK · UI VERIFICATION</span>
+<h1>مساحة اختبار التحسينات</h1>
+<p class="fixture-note">بيانات تجريبية معزولة، وليست محادثة المستخدم. الواجهات المعروضة هي ملفات الإضافة الفعلية. لا يُشغَّل صوت ولا خدمة محلية في هذه الصفحة.</p>
+<button type="button" id="bds-toggle">لوحة BDS</button>
+<article class="ds-message ds-message--user" data-role="user"><p>أريد شرحًا عن إدارة المشروعات، وكيف أرتّب المهام اليومية؟</p></article>
+<article class="ds-message ds-message--assistant" data-role="assistant"><div class="ds-markdown"><p>لإدارة المشروعات بوضوح: حدّد الهدف، ثم قسّم المهام إلى خطوات صغيرة قابلة للتنفيذ.</p><pre><code class="language-javascript" data-filename="project.js">const projectName = "إدارة المشروعات";
+console.log(projectName);</code></pre></div></article>
+<article class="ds-message ds-message--user" data-role="user"><p>اكتب لي مثالًا آخر عن تنظيم الملفات.</p></article>
+<article class="ds-message ds-message--assistant" data-role="assistant"><div class="ds-markdown"><p>رتّب الملفات حسب المشروع والتاريخ، واحتفظ بنسخة احتياطية منفصلة.</p></div></article>
+<textarea id="chat-input" placeholder="اكتب رسالة تجريبية…" rows="2"></textarea>
+</main>
+<script src="../enhancements/speech-languages.js"></script>
+<script src="../enhancements/voice-panel.js"></script>
+<script src="../enhancements/deepseek-voice.js"></script>
+<script src="../enhancements/conversation-tools.js"></script>
+<script src="../enhancements/quick-access.js"></script>
+</body>
+</html>
